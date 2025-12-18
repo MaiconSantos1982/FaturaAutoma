@@ -2,12 +2,13 @@
 
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
+import { Modal } from '@/components/ui/Modal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -15,6 +16,8 @@ const fileTypeOptions = [
     { value: 'pdf', label: 'PDF' },
     { value: 'xml', label: 'XML' },
 ];
+
+const WEBHOOK_URL = 'https://webhook.superadesafio.com.br/webhook/f1763123-1807-4e7b-87db-1f1ac457ca9c';
 
 interface InvoiceData {
     invoice_number: string;
@@ -34,9 +37,9 @@ export default function UploadPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState(false);
+    const [showProcessingModal, setShowProcessingModal] = useState(false);
+    const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
+    const [processingMessage, setProcessingMessage] = useState('');
     const [invoiceData, setInvoiceData] = useState<InvoiceData>({
         invoice_number: '',
         invoice_series: '',
@@ -77,7 +80,6 @@ export default function UploadPage() {
 
     const processFile = async (selectedFile: File) => {
         setFile(selectedFile);
-        setError('');
         setIsProcessing(true);
 
         // Determine file type
@@ -87,9 +89,8 @@ export default function UploadPage() {
             file_type: ext === 'xml' ? 'xml' : 'pdf'
         }));
 
-        // Simulate OCR processing delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
+        // Simulate processing delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         setIsProcessing(false);
     };
 
@@ -99,17 +100,14 @@ export default function UploadPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
 
-        if (!invoiceData.invoice_number || !invoiceData.supplier_name || !invoiceData.total_amount) {
-            setError('Número da NF, fornecedor e valor são obrigatórios');
-            return;
-        }
-
-        setIsSubmitting(true);
+        // Show processing modal
+        setShowProcessingModal(true);
+        setProcessingStatus('processing');
+        setProcessingMessage('Enviando fatura para processamento...');
 
         try {
-            // Upload file if exists
+            // Upload file to Supabase if exists
             let fileUrl: string | undefined;
             if (file) {
                 const fileExt = file.name.split('.').pop();
@@ -127,66 +125,72 @@ export default function UploadPage() {
                 }
             }
 
-            // Check auto-approval
-            const amount = parseFloat(invoiceData.total_amount.replace(/[^\d,.-]/g, '').replace(',', '.'));
-            const autoApproveLimit = company?.auto_approve_limit || 0;
-            const shouldAutoApprove = amount <= autoApproveLimit;
-
-            // Create invoice
-            const { error: insertError } = await supabase.from('invoices').insert({
-                company_id: company?.id,
-                invoice_number: invoiceData.invoice_number,
-                invoice_series: invoiceData.invoice_series || null,
-                supplier_name: invoiceData.supplier_name,
-                supplier_cnpj: invoiceData.supplier_cnpj || null,
-                total_amount: amount,
-                due_date: invoiceData.due_date || null,
-                invoice_date: invoiceData.invoice_date || null,
-                description: invoiceData.description || null,
+            // Prepare data for webhook
+            const webhookPayload = {
+                file_url: fileUrl || '',
                 file_type: invoiceData.file_type,
-                status: 'pending',
-                approval_status: shouldAutoApprove ? 'auto_approved' : 'pending',
-                original_file_url: fileUrl,
-                created_by: user?.id,
+                company_id: company?.id,
+                user_id: user?.id,
+                invoice_data: {
+                    invoice_number: invoiceData.invoice_number || undefined,
+                    invoice_series: invoiceData.invoice_series || undefined,
+                    supplier_name: invoiceData.supplier_name || undefined,
+                    supplier_cnpj: invoiceData.supplier_cnpj || undefined,
+                    total_amount: invoiceData.total_amount ? parseFloat(invoiceData.total_amount.replace(/[^\d,.-]/g, '').replace(',', '.')) : undefined,
+                    due_date: invoiceData.due_date || undefined,
+                    invoice_date: invoiceData.invoice_date || undefined,
+                    description: invoiceData.description || undefined,
+                }
+            };
+
+            // Send to n8n webhook
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(webhookPayload),
             });
 
-            if (insertError) throw insertError;
+            if (!response.ok) {
+                throw new Error(`Webhook retornou status ${response.status}`);
+            }
 
-            setSuccess(true);
+            const result = await response.json();
+
+            // Success
+            setProcessingStatus('success');
+            setProcessingMessage(result.message || 'Fatura enviada com sucesso! O processamento foi iniciado.');
+
+            // Redirect after 3 seconds
             setTimeout(() => {
                 router.push('/dashboard');
-            }, 2000);
+            }, 3000);
+
         } catch (err) {
-            console.error('Error creating invoice:', err);
-            setError('Erro ao processar fatura. Tente novamente.');
-        } finally {
-            setIsSubmitting(false);
+            console.error('Error processing invoice:', err);
+            setProcessingStatus('error');
+            setProcessingMessage(
+                err instanceof Error
+                    ? `Erro: ${err.message}`
+                    : 'Erro ao processar fatura. Tente novamente.'
+            );
         }
     };
 
-    if (success) {
-        return (
-            <div className="max-w-2xl mx-auto">
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <div className="inline-flex items-center justify-center p-3 bg-green-100 rounded-full mb-4">
-                            <CheckCircle className="h-8 w-8 text-green-600" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                            Fatura processada com sucesso!
-                        </h2>
-                        <p className="text-gray-500">Redirecionando para o dashboard...</p>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
+    const closeModal = () => {
+        setShowProcessingModal(false);
+        if (processingStatus === 'error') {
+            // Reset on error so user can try again
+            setProcessingStatus('processing');
+        }
+    };
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900">Nova Fatura</h1>
-                <p className="text-gray-500">Faça upload e preencha os dados da fatura</p>
+                <p className="text-gray-500">Faça upload e preencha os dados da fatura (todos os campos são opcionais)</p>
             </div>
 
             <Card>
@@ -220,6 +224,13 @@ export default function UploadPage() {
                                         {(file.size / 1024 / 1024).toFixed(2)} MB
                                     </p>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setFile(null)}
+                                    className="ml-4 p-1 hover:bg-gray-200 rounded"
+                                >
+                                    <X className="h-5 w-5 text-gray-500" />
+                                </button>
                             </div>
                         ) : (
                             <>
@@ -256,13 +267,20 @@ export default function UploadPage() {
             {/* Invoice Data Form */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Dados da Fatura</CardTitle>
+                    <CardTitle>Dados da Fatura (Opcional)</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                                <strong>Dica:</strong> Todos os campos abaixo são opcionais. O sistema n8n irá extrair os dados automaticamente.
+                                Preencha apenas se desejar complementar ou corrigir informações.
+                            </p>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input
-                                label="Número da NF *"
+                                label="Número da NF"
                                 placeholder="Ex: 12345"
                                 value={invoiceData.invoice_number}
                                 onChange={(e) => handleInputChange('invoice_number', e.target.value)}
@@ -277,7 +295,7 @@ export default function UploadPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input
-                                label="Nome do Fornecedor *"
+                                label="Nome do Fornecedor"
                                 placeholder="Digite o nome do fornecedor"
                                 value={invoiceData.supplier_name}
                                 onChange={(e) => handleInputChange('supplier_name', e.target.value)}
@@ -292,7 +310,7 @@ export default function UploadPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <Input
-                                label="Valor Total *"
+                                label="Valor Total"
                                 placeholder="R$ 0,00"
                                 value={invoiceData.total_amount}
                                 onChange={(e) => handleInputChange('total_amount', e.target.value)}
@@ -318,13 +336,6 @@ export default function UploadPage() {
                             onChange={(e) => handleInputChange('description', e.target.value)}
                         />
 
-                        {error && (
-                            <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg">
-                                <AlertCircle className="h-5 w-5 flex-shrink-0" />
-                                <span className="text-sm">{error}</span>
-                            </div>
-                        )}
-
                         <div className="flex gap-3 pt-4">
                             <Button
                                 type="button"
@@ -333,13 +344,63 @@ export default function UploadPage() {
                             >
                                 Cancelar
                             </Button>
-                            <Button type="submit" isLoading={isSubmitting}>
+                            <Button type="submit">
                                 Confirmar e Processar
                             </Button>
                         </div>
                     </form>
                 </CardContent>
             </Card>
+
+            {/* Processing Modal */}
+            <Modal
+                isOpen={showProcessingModal}
+                onClose={processingStatus !== 'processing' ? closeModal : () => { }}
+                title={
+                    processingStatus === 'processing'
+                        ? 'Processando...'
+                        : processingStatus === 'success'
+                            ? 'Sucesso!'
+                            : 'Erro'
+                }
+            >
+                <div className="text-center py-6">
+                    {processingStatus === 'processing' && (
+                        <>
+                            <Spinner size="lg" className="mx-auto mb-4" />
+                            <p className="text-gray-600">{processingMessage}</p>
+                        </>
+                    )}
+
+                    {processingStatus === 'success' && (
+                        <>
+                            <div className="inline-flex items-center justify-center p-3 bg-green-100 rounded-full mb-4">
+                                <CheckCircle className="h-12 w-12 text-green-600" />
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900 mb-2">
+                                Fatura Enviada!
+                            </p>
+                            <p className="text-gray-600 mb-4">{processingMessage}</p>
+                            <p className="text-sm text-gray-500">Redirecionando para o dashboard...</p>
+                        </>
+                    )}
+
+                    {processingStatus === 'error' && (
+                        <>
+                            <div className="inline-flex items-center justify-center p-3 bg-red-100 rounded-full mb-4">
+                                <AlertCircle className="h-12 w-12 text-red-600" />
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900 mb-2">
+                                Erro no Processamento
+                            </p>
+                            <p className="text-gray-600 mb-6">{processingMessage}</p>
+                            <Button onClick={closeModal} variant="secondary">
+                                Fechar e Tentar Novamente
+                            </Button>
+                        </>
+                    )}
+                </div>
+            </Modal>
         </div>
     );
 }
