@@ -74,14 +74,30 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             return errorResponse('Erro ao rejeitar fatura', 500);
         }
 
-        // Create audit log
+        // Check if approver is different from assigned
+        const isAssignedApprover = !invoice.assigned_approver_id || invoice.assigned_approver_id === user.id;
+
+        // Create audit log with approver comparison
         await supabase.from('audit_log').insert({
             company_id: user.company_id,
             user_id: user.id,
             invoice_id: id,
             action: 'reject_invoice',
-            old_values: { approval_status: invoice.approval_status },
-            new_values: { approval_status: 'rejected', reason: body.reason },
+            old_values: {
+                approval_status: invoice.approval_status,
+                assigned_approver_id: invoice.assigned_approver_id,
+            },
+            new_values: {
+                approval_status: 'rejected',
+                reason: body.reason,
+                approver_id: user.id,
+                approver_name: user.name,
+                is_assigned_approver: isAssignedApprover,
+                assigned_approver_id: invoice.assigned_approver_id,
+                approval_note: !isAssignedApprover
+                    ? `Rejeição realizada por ${user.name} (não era o aprovador designado)`
+                    : null,
+            },
         });
 
         // Notify invoice creator

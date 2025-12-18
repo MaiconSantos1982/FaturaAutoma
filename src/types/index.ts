@@ -47,7 +47,9 @@ export interface Invoice {
   variance_detected?: boolean;
   variance_description?: string;
   approval_status: ApprovalStatus;
-  approver_id?: string;
+  approval_level?: number;
+  assigned_approver_id?: string;  // Aprovador designado pela regra
+  approver_id?: string;            // Quem de fato aprovou
   approved_at?: string;
   approval_notes?: string;
   debit_account_code?: string;
@@ -58,6 +60,7 @@ export interface Invoice {
   updated_at: string;
   created_by?: string;
   approver?: User;
+  assigned_approver?: User;
 }
 
 export interface ApprovalRule {

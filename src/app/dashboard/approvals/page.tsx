@@ -53,13 +53,29 @@ export default function ApprovalsPage() {
 
             if (updateError) throw updateError;
 
-            // Log audit
+            // Check if approver is different from assigned
+            const isAssignedApprover = !selectedInvoice.assigned_approver_id || selectedInvoice.assigned_approver_id === user.id;
+
+            // Log audit with approver comparison
             await supabase.from('audit_log').insert({
                 company_id: company?.id,
                 user_id: user.id,
                 invoice_id: selectedInvoice.id,
                 action: 'approve_invoice',
-                new_values: { approval_status: 'approved', approver_id: user.id },
+                old_values: {
+                    approval_status: selectedInvoice.approval_status,
+                    assigned_approver_id: selectedInvoice.assigned_approver_id,
+                },
+                new_values: {
+                    approval_status: 'approved',
+                    approver_id: user.id,
+                    approver_name: user.name,
+                    is_assigned_approver: isAssignedApprover,
+                    assigned_approver_id: selectedInvoice.assigned_approver_id,
+                    approval_note: !isAssignedApprover
+                        ? `Aprovação realizada por ${user.name} (não era o aprovador designado)`
+                        : null,
+                },
             });
 
             setSuccessMessage('Fatura aprovada com sucesso!');
@@ -94,13 +110,30 @@ export default function ApprovalsPage() {
 
             if (updateError) throw updateError;
 
-            // Log audit
+            // Check if approver is different from assigned
+            const isAssignedApprover = !selectedInvoice.assigned_approver_id || selectedInvoice.assigned_approver_id === user.id;
+
+            // Log audit with approver comparison
             await supabase.from('audit_log').insert({
                 company_id: company?.id,
                 user_id: user.id,
                 invoice_id: selectedInvoice.id,
                 action: 'reject_invoice',
-                new_values: { approval_status: 'rejected', reason: rejectionReason },
+                old_values: {
+                    approval_status: selectedInvoice.approval_status,
+                    assigned_approver_id: selectedInvoice.assigned_approver_id,
+                },
+                new_values: {
+                    approval_status: 'rejected',
+                    reason: rejectionReason,
+                    approver_id: user.id,
+                    approver_name: user.name,
+                    is_assigned_approver: isAssignedApprover,
+                    assigned_approver_id: selectedInvoice.assigned_approver_id,
+                    approval_note: !isAssignedApprover
+                        ? `Rejeição realizada por ${user.name} (não era o aprovador designado)`
+                        : null,
+                },
             });
 
             setSuccessMessage('Fatura rejeitada.');
