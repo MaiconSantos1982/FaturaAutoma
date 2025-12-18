@@ -3,3 +3,6 @@
 
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# Service Role Key (Server-side only - NEVER expose to frontend!)
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key

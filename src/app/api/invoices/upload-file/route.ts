@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAuth } from '@/lib/auth';
 import { errorResponse, successResponse, unauthorizedResponse } from '@/lib/api-response';
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         // Converter File para ArrayBuffer para upload via servidor
         const fileBuffer = await file.arrayBuffer();
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
             .from(BUCKET_NAME)
             .upload(fileName, fileBuffer, {
                 contentType: file.type || 'application/pdf',
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         console.log('Upload bem-sucedido:', uploadData);
 
         // 4. Obter URL Pública
-        const { data: urlData } = supabase.storage
+        const { data: urlData } = supabaseAdmin.storage
             .from(BUCKET_NAME)
             .getPublicUrl(fileName);
 
