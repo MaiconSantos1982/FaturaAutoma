@@ -32,20 +32,28 @@ export async function POST(request: NextRequest) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${companyId}/invoices/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
+        console.log('Tentando upload:', { fileName, bucket: BUCKET_NAME, fileSize: file.size, fileType: file.type });
+
         // Converter File para ArrayBuffer para upload via servidor
         const fileBuffer = await file.arrayBuffer();
 
         const { data: uploadData, error: uploadError } = await supabase.storage
             .from(BUCKET_NAME)
             .upload(fileName, fileBuffer, {
-                contentType: file.type,
+                contentType: file.type || 'application/pdf',
                 upsert: false
             });
 
         if (uploadError) {
-            console.error('Erro no upload Storage:', uploadError);
-            return errorResponse('Falha no upload do arquivo', 500);
+            console.error('Erro detalhado no upload:', {
+                message: uploadError.message,
+                name: uploadError.name,
+                error: uploadError
+            });
+            return errorResponse(`Falha no upload: ${uploadError.message}`, 500);
         }
+
+        console.log('Upload bem-sucedido:', uploadData);
 
         // 4. Obter URL Pública
         const { data: urlData } = supabase.storage
@@ -55,11 +63,22 @@ export async function POST(request: NextRequest) {
         const publicUrl = urlData.publicUrl;
 
         // 5. Chamar Webhook do n8n
+        // Collect optional invoice data if provided
+        const invoiceData: Record<string, unknown> = {};
+        if (formData.get('invoice_number')) invoiceData.invoice_number = formData.get('invoice_number');
+        if (formData.get('supplier_name')) invoiceData.supplier_name = formData.get('supplier_name');
+        if (formData.get('supplier_cnpj')) invoiceData.supplier_cnpj = formData.get('supplier_cnpj');
+        if (formData.get('total_amount')) invoiceData.total_amount = formData.get('total_amount');
+        if (formData.get('invoice_date')) invoiceData.invoice_date = formData.get('invoice_date');
+        if (formData.get('due_date')) invoiceData.due_date = formData.get('due_date');
+        if (formData.get('description')) invoiceData.description = formData.get('description');
+
         const webhookPayload = {
             file_url: publicUrl,
-            file_type: 'pdf', // Forçado conforme solicitado
+            file_type: 'pdf',
             company_id: companyId,
-            user_id: userId
+            user_id: userId,
+            invoice_data: Object.keys(invoiceData).length > 0 ? invoiceData : undefined
         };
 
         console.log('Enviando para webhook:', webhookPayload);

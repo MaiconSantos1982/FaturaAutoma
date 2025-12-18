@@ -7,8 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
-import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface InvoiceFormData {
+    invoice_number: string;
+    supplier_name: string;
+    supplier_cnpj: string;
+    total_amount: string;
+    invoice_date: string;
+    due_date: string;
+    description: string;
+}
 
 export default function UploadPage() {
     const router = useRouter();
@@ -20,7 +30,15 @@ export default function UploadPage() {
     const [processingMessage, setProcessingMessage] = useState('');
 
     // Optional manual data (if user wants to help OCR)
-    const [invoiceNumber, setInvoiceNumber] = useState('');
+    const [formData, setFormData] = useState<InvoiceFormData>({
+        invoice_number: '',
+        supplier_name: '',
+        supplier_cnpj: '',
+        total_amount: '',
+        invoice_date: '',
+        due_date: '',
+        description: '',
+    });
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -48,6 +66,10 @@ export default function UploadPage() {
         }
     };
 
+    const handleInputChange = (field: keyof InvoiceFormData, value: string) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -62,22 +84,27 @@ export default function UploadPage() {
         setProcessingMessage('Enviando arquivo e iniciando processamento...');
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            if (company?.id) formData.append('company_id', company.id);
-            if (user?.id) formData.append('user_id', user.id);
+            const formDataToSend = new FormData();
+            formDataToSend.append('file', file);
+            if (company?.id) formDataToSend.append('company_id', company.id);
+            if (user?.id) formDataToSend.append('user_id', user.id);
 
-            // Optional: send manual data if needed in future
-            // formData.append('invoice_number', invoiceNumber);
+            // Add optional invoice fields if filled
+            if (formData.invoice_number) formDataToSend.append('invoice_number', formData.invoice_number);
+            if (formData.supplier_name) formDataToSend.append('supplier_name', formData.supplier_name);
+            if (formData.supplier_cnpj) formDataToSend.append('supplier_cnpj', formData.supplier_cnpj);
+            if (formData.total_amount) formDataToSend.append('total_amount', formData.total_amount);
+            if (formData.invoice_date) formDataToSend.append('invoice_date', formData.invoice_date);
+            if (formData.due_date) formDataToSend.append('due_date', formData.due_date);
+            if (formData.description) formDataToSend.append('description', formData.description);
 
             // Call Backend API
             const response = await fetch('/api/invoices/upload-file', {
                 method: 'POST',
                 headers: {
-                    // Get token from localStorage since it's stored there by AuthContext
                     'Authorization': `Bearer ${localStorage.getItem('fatura_user_token') || ''}`
                 },
-                body: formData,
+                body: formDataToSend,
             });
 
             const result = await response.json();
@@ -117,26 +144,25 @@ export default function UploadPage() {
         <div className="max-w-2xl mx-auto space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900">Nova Fatura</h1>
-                <p className="text-gray-500">Faça o upload da Nota Fiscal para processamento automático</p>
+                <p className="text-gray-500">Faça o upload e preencha dados adicionais (opcionais)</p>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Upload do PDF</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-
-                        {/* Drop Zone */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Upload Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Upload do Documento</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                         <div
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
                             className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
-                                ? 'border-blue-500 bg-blue-50'
-                                : file
-                                    ? 'border-green-500 bg-green-50'
-                                    : 'border-gray-300 hover:border-gray-400'
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : file
+                                        ? 'border-green-500 bg-green-50'
+                                        : 'border-gray-300 hover:border-gray-400'
                                 }`}
                         >
                             {file ? (
@@ -160,43 +186,103 @@ export default function UploadPage() {
                                 <>
                                     <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                                     <p className="text-gray-600 mb-2">
-                                        Arraste e solte o PDF aqui, ou{' '}
+                                        Arraste e solte o arquivo aqui, ou{' '}
                                         <label className="text-blue-600 cursor-pointer hover:underline">
                                             clique para selecionar
                                             <input
                                                 type="file"
                                                 className="hidden"
-                                                accept=".pdf"
+                                                accept=".pdf,.xml,.png,.jpg,.jpeg"
                                                 onChange={handleFileSelect}
                                             />
                                         </label>
                                     </p>
-                                    <p className="text-sm text-gray-500">Apenas arquivos PDF</p>
+                                    <p className="text-sm text-gray-500">PDF, XML, PNG ou JPG</p>
                                 </>
                             )}
                         </div>
+                    </CardContent>
+                </Card>
 
-                        {/* Optional Info Box */}
+                {/* Optional Invoice Data */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Dados da Fatura (Opcional)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                            Ao confirmar, o arquivo será enviado para nossos servidores e processado para extração automática dos dados.
+                            <strong>Dica:</strong> Todos os campos abaixo são opcionais. O sistema extrairá os dados automaticamente.
+                            Preencha apenas se desejar complementar ou corrigir informações.
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex gap-3 pt-2">
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() => router.back()}
-                            >
-                                Cancelar
-                            </Button>
-                            <Button type="submit" disabled={!file}>
-                                Confirmar Envio
-                            </Button>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input
+                                label="Número da NF"
+                                placeholder="Ex: 12345"
+                                value={formData.invoice_number}
+                                onChange={(e) => handleInputChange('invoice_number', e.target.value)}
+                            />
+                            <Input
+                                label="Nome do Fornecedor"
+                                placeholder="Nome do fornecedor"
+                                value={formData.supplier_name}
+                                onChange={(e) => handleInputChange('supplier_name', e.target.value)}
+                            />
                         </div>
-                    </form>
-                </CardContent>
-            </Card>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input
+                                label="CNPJ do Fornecedor"
+                                placeholder="00.000.000/0000-00"
+                                value={formData.supplier_cnpj}
+                                onChange={(e) => handleInputChange('supplier_cnpj', e.target.value)}
+                            />
+                            <Input
+                                label="Valor Total"
+                                placeholder="R$ 0,00"
+                                value={formData.total_amount}
+                                onChange={(e) => handleInputChange('total_amount', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input
+                                type="date"
+                                label="Data de Emissão"
+                                value={formData.invoice_date}
+                                onChange={(e) => handleInputChange('invoice_date', e.target.value)}
+                            />
+                            <Input
+                                type="date"
+                                label="Data de Vencimento"
+                                value={formData.due_date}
+                                onChange={(e) => handleInputChange('due_date', e.target.value)}
+                            />
+                        </div>
+
+                        <Input
+                            label="Descrição"
+                            placeholder="Observações ou descrição"
+                            value={formData.description}
+                            onChange={(e) => handleInputChange('description', e.target.value)}
+                        />
+                    </CardContent>
+                </Card>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => router.back()}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button type="submit" disabled={!file}>
+                        Confirmar Envio
+                    </Button>
+                </div>
+            </form>
 
             {/* Processing Modal */}
             <Modal
@@ -227,6 +313,7 @@ export default function UploadPage() {
                                 Upload Concluído!
                             </p>
                             <p className="text-gray-600 mb-4">{processingMessage}</p>
+                            <p className="text-sm text-gray-500">Redirecionando...</p>
                         </>
                     )}
 
