@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye } from 'lucide-react';
+import { Eye, Trash2 } from 'lucide-react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Invoice } from '@/types';
 import { formatCurrency, formatDate, getApprovalStatusEmoji, getApprovalStatusLabel } from '@/lib/utils';
+import { DeleteInvoiceModal } from './DeleteInvoiceModal';
 
 interface InvoiceTableProps {
     invoices: Invoice[];
@@ -14,6 +15,8 @@ interface InvoiceTableProps {
     page: number;
     totalPages: number;
     onPageChange: (page: number) => void;
+    onDelete?: (invoiceId: string) => void;
+    showDeleteButton?: boolean;
 }
 
 export function InvoiceTable({
@@ -22,8 +25,12 @@ export function InvoiceTable({
     page,
     totalPages,
     onPageChange,
+    onDelete,
+    showDeleteButton = true,
 }: InvoiceTableProps) {
     const router = useRouter();
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
 
     const getStatusVariant = (status: string) => {
         switch (status) {
@@ -36,6 +43,38 @@ export function InvoiceTable({
                 return 'danger';
             default:
                 return 'default';
+        }
+    };
+
+    const handleDeleteClick = (e: React.MouseEvent, invoice: Invoice) => {
+        e.stopPropagation();
+        setInvoiceToDelete(invoice);
+        setDeleteModalOpen(true);
+    };
+
+    const handleDeleteConfirm = async (reason: string) => {
+        if (!invoiceToDelete) return;
+
+        const token = localStorage.getItem('fatura_user_token') || '';
+
+        const response = await fetch(`/api/invoices/${invoiceToDelete.id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ reason }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Erro ao excluir fatura');
+        }
+
+        // Callback to refresh list
+        if (onDelete) {
+            onDelete(invoiceToDelete.id);
         }
     };
 
@@ -92,31 +131,54 @@ export function InvoiceTable({
             key: 'actions',
             header: 'Ações',
             render: (invoice: Invoice) => (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/dashboard/invoices/${invoice.id}`);
-                    }}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Ver detalhes"
-                >
-                    <Eye className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1 justify-end">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/invoices/${invoice.id}`);
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Ver detalhes"
+                    >
+                        <Eye className="h-4 w-4" />
+                    </button>
+                    {showDeleteButton && (
+                        <button
+                            onClick={(e) => handleDeleteClick(e, invoice)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Excluir fatura"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
             ),
             className: 'text-right',
         },
     ];
 
     return (
-        <Table
-            columns={columns}
-            data={invoices}
-            isLoading={isLoading}
-            emptyMessage="Nenhuma fatura encontrada"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            onRowClick={(invoice) => router.push(`/dashboard/invoices/${invoice.id}`)}
-        />
+        <>
+            <Table
+                columns={columns}
+                data={invoices}
+                isLoading={isLoading}
+                emptyMessage="Nenhuma fatura encontrada"
+                page={page}
+                totalPages={totalPages}
+                onPageChange={onPageChange}
+                onRowClick={(invoice) => router.push(`/dashboard/invoices/${invoice.id}`)}
+            />
+
+            <DeleteInvoiceModal
+                isOpen={deleteModalOpen}
+                onClose={() => {
+                    setDeleteModalOpen(false);
+                    setInvoiceToDelete(null);
+                }}
+                invoice={invoiceToDelete}
+                onConfirm={handleDeleteConfirm}
+            />
+        </>
     );
 }

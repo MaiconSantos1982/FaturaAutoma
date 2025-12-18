@@ -45,6 +45,7 @@ export function useInvoices(initialFilters?: InvoiceFilters): UseInvoicesResult 
                 .from('invoices')
                 .select('*, approver:users!approver_id(*)', { count: 'exact' })
                 .eq('company_id', company.id)
+                .neq('status', 'deleted')  // Exclude deleted invoices
                 .order('created_at', { ascending: false });
 
             // Apply filters
@@ -90,8 +91,9 @@ export function useInvoices(initialFilters?: InvoiceFilters): UseInvoicesResult 
             // Fetch metrics
             const { data: allInvoices, error: metricsError } = await supabase
                 .from('invoices')
-                .select('approval_status, total_amount')
-                .eq('company_id', company.id);
+                .select('approval_status, total_amount, status')
+                .eq('company_id', company.id)
+                .neq('status', 'deleted');  // Exclude deleted invoices
 
             if (metricsError) throw metricsError;
 

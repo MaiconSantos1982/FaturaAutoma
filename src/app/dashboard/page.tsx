@@ -66,6 +66,7 @@ export default function DashboardPage() {
                             page={page}
                             totalPages={totalPages}
                             onPageChange={setPage}
+                            onDelete={() => refetch()}
                         />
                     )}
                 </CardContent>

@@ -11,7 +11,8 @@ import {
     Settings,
     LogOut,
     Menu,
-    X
+    X,
+    Trash2
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/dashboard/upload', label: 'Nova Fatura', icon: Upload },
     { href: '/dashboard/approvals', label: 'Aprovações', icon: CheckCircle, roles: ['super_admin', 'master'] },
+    { href: '/dashboard/deleted', label: 'Excluídas', icon: Trash2, roles: ['super_admin', 'master'] },
     { href: '/dashboard/admin', label: 'Configurações', icon: Settings, roles: ['super_admin'] },
 ];
 

@@ -150,6 +150,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
         const { id } = await params;
 
+        // Parse body to get deletion reason
+        let reason = '';
+        try {
+            const body = await request.json();
+            reason = body.reason || '';
+        } catch {
+            // Body might be empty for legacy calls
+        }
+
+        if (!reason || reason.trim().length < 5) {
+            return errorResponse('Motivo da exclusão é obrigatório (mínimo 5 caracteres)', 400);
+        }
+
         // Get current invoice
         const { data: currentInvoice, error: fetchError } = await supabase
             .from('invoices')
@@ -166,16 +179,24 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             return forbiddenResponse('Sem permissão para excluir esta fatura');
         }
 
-        // Only super_admin can delete
-        if (user.role !== 'super_admin') {
+        // Only super_admin or master can delete
+        if (user.role !== 'super_admin' && user.role !== 'master') {
             return forbiddenResponse('Apenas administradores podem excluir faturas');
         }
 
-        // Soft delete by setting status
+        // Already deleted?
+        if (currentInvoice.status === 'deleted') {
+            return errorResponse('Esta fatura já foi excluída', 400);
+        }
+
+        // Soft delete with deletion metadata
         const { error: deleteError } = await supabase
             .from('invoices')
             .update({
                 status: 'deleted',
+                deleted_at: new Date().toISOString(),
+                deleted_by: user.id,
+                deletion_reason: reason.trim(),
                 updated_at: new Date().toISOString(),
             })
             .eq('id', id);
@@ -192,6 +213,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             invoice_id: id,
             action: 'delete_invoice',
             old_values: currentInvoice,
+            new_values: {
+                status: 'deleted',
+                deletion_reason: reason.trim(),
+                deleted_by: user.id,
+                deleted_by_name: user.name
+            },
         });
 
         return successResponse(null, 'Fatura excluída com sucesso');
