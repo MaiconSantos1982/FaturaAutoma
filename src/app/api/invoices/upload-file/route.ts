@@ -3,12 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { verifyAuth } from '@/lib/auth';
 import { errorResponse, successResponse, unauthorizedResponse } from '@/lib/api-response';
 
-// Configurar o parser de multipart/form-data do Next.js
-export const config = {
-    api: {
-        bodyParser: false,
-    },
-};
+// Config removida para compatibilidade com Next.js App Router
 
 const WEBHOOK_URL = 'https://webhook.superadesafio.com.br/webhook/f1763123-1807-4e7b-87db-1f1ac457ca9c';
 const BUCKET_NAME = 'Fatura';

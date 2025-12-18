@@ -74,12 +74,8 @@ export default function UploadPage() {
             const response = await fetch('/api/invoices/upload-file', {
                 method: 'POST',
                 headers: {
-                    // Authorization header is needed if using middleware logic, 
-                    // but browser sends cookies automatically or we rely on token if using customized fetch
-                    // In this project structure, verifyAuth pulls from cookie or header. 
-                    // Assuming cookie authentication or header injection via interceptor if implemented.
-                    // If manually handling token:
-                    'Authorization': `Bearer ${user?.token || ''}` // Ensure token is accessible or handled by cookie
+                    // Get token from localStorage since it's stored there by AuthContext
+                    'Authorization': `Bearer ${localStorage.getItem('fatura_user_token') || ''}`
                 },
                 body: formData,
             });
@@ -137,10 +133,10 @@ export default function UploadPage() {
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
                             className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : file
-                                        ? 'border-green-500 bg-green-50'
-                                        : 'border-gray-300 hover:border-gray-400'
+                                ? 'border-blue-500 bg-blue-50'
+                                : file
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-300 hover:border-gray-400'
                                 }`}
                         >
                             {file ? (
