@@ -13,14 +13,33 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Admin client (service_role key - APENAS para server-side, bypass RLS)
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// Usar getSupabaseAdmin() em API routes, NUNCA no frontend!
+let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false
+export const getSupabaseAdmin = () => {
+    // Verificar se estamos no servidor
+    if (typeof window !== 'undefined') {
+        throw new Error('supabaseAdmin só pode ser usado no servidor!');
     }
-});
+
+    // Lazy initialization
+    if (!_supabaseAdmin) {
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (!supabaseServiceKey) {
+            throw new Error('SUPABASE_SERVICE_ROLE_KEY não está configurada');
+        }
+
+        _supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        });
+    }
+
+    return _supabaseAdmin;
+};
 
 export const isSupabaseConfigured = () => {
     return (

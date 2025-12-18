@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifyAuth } from '@/lib/auth';
 import { errorResponse, successResponse, unauthorizedResponse } from '@/lib/api-response';
 
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
         // Converter File para ArrayBuffer para upload via servidor
         const fileBuffer = await file.arrayBuffer();
 
+        const supabaseAdmin = getSupabaseAdmin();
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
             .from(BUCKET_NAME)
             .upload(fileName, fileBuffer, {
