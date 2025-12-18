@@ -47,7 +47,7 @@ export default function InvoiceDetailsPage() {
             try {
                 const { data, error: queryError } = await supabase
                     .from('invoices')
-                    .select('*, approver:users!approver_id(*)')
+                    .select('*, approver:users!approver_id(*), assigned_approver:users!assigned_approver_id(*)')
                     .eq('id', params.id)
                     .single();
 
@@ -370,6 +370,14 @@ export default function InvoiceDetailsPage() {
                                                     por {invoice.approver.name}
                                                 </p>
                                             )}
+                                            {/* Show if approved by different person */}
+                                            {invoice.assigned_approver && invoice.approver_id !== invoice.assigned_approver_id && (
+                                                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                                                    <p className="text-yellow-700">
+                                                        ⚠️ Responsável: {invoice.assigned_approver.name}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -421,6 +429,11 @@ export default function InvoiceDetailsPage() {
                                             <p className="font-medium text-gray-900">
                                                 Aguardando aprovação
                                             </p>
+                                            {invoice.assigned_approver && (
+                                                <p className="text-sm text-gray-500">
+                                                    de {invoice.assigned_approver.name}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 )}

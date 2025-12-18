@@ -159,7 +159,7 @@ export function usePendingApprovals() {
         try {
             const { data, error: queryError } = await supabase
                 .from('invoices')
-                .select('*')
+                .select('*, assigned_approver:users!assigned_approver_id(id, name, email)')
                 .eq('company_id', company.id)
                 .eq('approval_status', 'pending')
                 .order('due_date', { ascending: true });
