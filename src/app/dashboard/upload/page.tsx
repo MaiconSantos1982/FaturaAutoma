@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatCNPJ, formatCurrencyInput, parseCurrencyInput } from '@/lib/utils';
 
 interface InvoiceFormData {
     invoice_number: string;
@@ -67,7 +68,16 @@ export default function UploadPage() {
     };
 
     const handleInputChange = (field: keyof InvoiceFormData, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        // Apply masks for specific fields
+        let formattedValue = value;
+
+        if (field === 'supplier_cnpj') {
+            formattedValue = formatCNPJ(value);
+        } else if (field === 'total_amount') {
+            formattedValue = formatCurrencyInput(value);
+        }
+
+        setFormData(prev => ({ ...prev, [field]: formattedValue }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -93,7 +103,11 @@ export default function UploadPage() {
             if (formData.invoice_number) formDataToSend.append('invoice_number', formData.invoice_number);
             if (formData.supplier_name) formDataToSend.append('supplier_name', formData.supplier_name);
             if (formData.supplier_cnpj) formDataToSend.append('supplier_cnpj', formData.supplier_cnpj);
-            if (formData.total_amount) formDataToSend.append('total_amount', formData.total_amount);
+            if (formData.total_amount) {
+                // Parse currency to number before sending
+                const amount = parseCurrencyInput(formData.total_amount);
+                formDataToSend.append('total_amount', amount.toString());
+            }
             if (formData.invoice_date) formDataToSend.append('invoice_date', formData.invoice_date);
             if (formData.due_date) formDataToSend.append('due_date', formData.due_date);
             if (formData.description) formDataToSend.append('description', formData.description);
@@ -159,10 +173,10 @@ export default function UploadPage() {
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
                             className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : file
-                                        ? 'border-green-500 bg-green-50'
-                                        : 'border-gray-300 hover:border-gray-400'
+                                ? 'border-blue-500 bg-blue-50'
+                                : file
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-300 hover:border-gray-400'
                                 }`}
                         >
                             {file ? (

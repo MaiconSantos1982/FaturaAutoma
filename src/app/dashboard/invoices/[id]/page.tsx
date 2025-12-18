@@ -29,6 +29,7 @@ import {
     getApprovalStatusLabel,
     getDocumentTypeLabel,
     getStatusLabel,
+    formatCNPJ,
 } from '@/lib/utils';
 
 export default function InvoiceDetailsPage() {
@@ -179,7 +180,7 @@ export default function InvoiceDetailsPage() {
                                 <div>
                                     <dt className="text-sm text-gray-500">CNPJ</dt>
                                     <dd className="font-medium text-gray-900">
-                                        {invoice.supplier_cnpj || '-'}
+                                        {invoice.supplier_cnpj ? formatCNPJ(invoice.supplier_cnpj) : '-'}
                                     </dd>
                                 </div>
                             </dl>

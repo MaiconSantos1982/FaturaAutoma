@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, ApprovalRule, UserRole } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from '@/lib/utils';
 
 const tabs = [
     { id: 'company', label: 'Empresa' },
@@ -71,7 +71,9 @@ function CompanySettings() {
 
     useEffect(() => {
         if (company) {
-            setAutoApproveLimit(company.auto_approve_limit?.toString() || '0');
+            // Format values for display
+            const limit = company.auto_approve_limit || 0;
+            setAutoApproveLimit(limit > 0 ? formatCurrencyInput((limit * 100).toString()) : '');
             setDefaultDebitAccount(company.default_debit_account || '');
             setDefaultCreditAccount(company.default_credit_account || '');
         }
@@ -85,7 +87,7 @@ function CompanySettings() {
             const { error } = await supabase
                 .from('companies')
                 .update({
-                    auto_approve_limit: parseFloat(autoApproveLimit) || 0,
+                    auto_approve_limit: parseCurrencyInput(autoApproveLimit),
                     default_debit_account: defaultDebitAccount || null,
                     default_credit_account: defaultCreditAccount || null,
                     updated_at: new Date().toISOString(),
@@ -126,10 +128,9 @@ function CompanySettings() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input
                         label="Limite de Auto-aprovação (R$)"
-                        type="number"
                         placeholder="0,00"
                         value={autoApproveLimit}
-                        onChange={(e) => setAutoApproveLimit(e.target.value)}
+                        onChange={(e) => setAutoApproveLimit(formatCurrencyInput(e.target.value))}
                         helperText="Faturas até este valor são auto-aprovadas"
                     />
                     <Input
@@ -475,6 +476,9 @@ function ApprovalRulesSettings() {
     const [savingLevel, setSavingLevel] = useState<number | null>(null);
     const [successMessage, setSuccessMessage] = useState('');
 
+    // State for formatted display values
+    const [formattedValues, setFormattedValues] = useState<Record<number, { min: string; max: string }>>({});
+
     useEffect(() => {
         fetchData();
     }, [company?.id]);
@@ -503,28 +507,41 @@ function ApprovalRulesSettings() {
             // Ensure we have 3 levels
             const existingRules = rulesResponse.data as ApprovalRule[];
             const allRules: ApprovalRule[] = [];
+            const initialFormatted: Record<number, { min: string; max: string }> = {};
 
             for (let level = 1; level <= 3; level++) {
                 const existing = existingRules.find((r) => r.approval_level === level);
                 if (existing) {
                     allRules.push(existing);
+                    // Format existing values for display
+                    initialFormatted[level] = {
+                        min: existing.min_amount > 0 ? formatCurrencyInput((existing.min_amount * 100).toString()) : '0,00',
+                        max: existing.max_amount ? formatCurrencyInput((existing.max_amount * 100).toString()) : ''
+                    };
                 } else {
+                    const defaultMin = level === 1 ? 0 : (level - 1) * 5000;
+                    const defaultMax = level * 5000;
                     allRules.push({
                         id: `new-${level}`,
                         company_id: company.id,
                         approval_level: level,
-                        min_amount: level === 1 ? 0 : (level - 1) * 5000,
-                        max_amount: level * 5000,
+                        min_amount: defaultMin,
+                        max_amount: defaultMax,
                         auto_approve: false,
                         approver_id: undefined,
                         is_active: true,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                     });
+                    initialFormatted[level] = {
+                        min: formatCurrencyInput((defaultMin * 100).toString()),
+                        max: formatCurrencyInput((defaultMax * 100).toString())
+                    };
                 }
             }
 
             setRules(allRules);
+            setFormattedValues(initialFormatted);
             setUsers(usersResponse.data as User[]);
         } catch (err) {
             console.error('Error fetching approval rules:', err);
@@ -539,6 +556,19 @@ function ApprovalRulesSettings() {
                 rule.approval_level === level ? { ...rule, [field]: value } : rule
             )
         );
+    };
+
+    const handleAmountChange = (level: number, field: 'min' | 'max', inputValue: string) => {
+        // Format for display
+        const formatted = formatCurrencyInput(inputValue);
+        setFormattedValues(prev => ({
+            ...prev,
+            [level]: { ...prev[level], [field]: formatted }
+        }));
+
+        // Parse and store numeric value
+        const numericValue = parseCurrencyInput(formatted);
+        updateRule(level, field === 'min' ? 'min_amount' : 'max_amount', numericValue || (field === 'max' ? null : 0));
     };
 
     const saveRule = async (level: number) => {
@@ -621,20 +651,15 @@ function ApprovalRulesSettings() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input
                                 label="Valor Mínimo (R$)"
-                                type="number"
-                                value={rule.min_amount.toString()}
-                                onChange={(e) =>
-                                    updateRule(rule.approval_level, 'min_amount', parseFloat(e.target.value) || 0)
-                                }
+                                placeholder="0,00"
+                                value={formattedValues[rule.approval_level]?.min || ''}
+                                onChange={(e) => handleAmountChange(rule.approval_level, 'min', e.target.value)}
                             />
                             <Input
                                 label="Valor Máximo (R$)"
-                                type="number"
-                                value={rule.max_amount?.toString() || ''}
-                                onChange={(e) =>
-                                    updateRule(rule.approval_level, 'max_amount', parseFloat(e.target.value) || null)
-                                }
                                 placeholder="Sem limite"
+                                value={formattedValues[rule.approval_level]?.max || ''}
+                                onChange={(e) => handleAmountChange(rule.approval_level, 'max', e.target.value)}
                             />
                         </div>
 

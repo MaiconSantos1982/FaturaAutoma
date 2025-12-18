@@ -6,7 +6,7 @@ import { Eye, Trash2 } from 'lucide-react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Invoice } from '@/types';
-import { formatCurrency, formatDate, getApprovalStatusEmoji, getApprovalStatusLabel } from '@/lib/utils';
+import { formatCurrency, formatDate, getApprovalStatusEmoji, getApprovalStatusLabel, formatCNPJ } from '@/lib/utils';
 import { DeleteInvoiceModal } from './DeleteInvoiceModal';
 
 interface InvoiceTableProps {
@@ -95,7 +95,7 @@ export function InvoiceTable({
                 <div>
                     <p className="font-medium text-gray-900">{invoice.supplier_name || 'Não informado'}</p>
                     {invoice.supplier_cnpj && (
-                        <p className="text-xs text-gray-500">{invoice.supplier_cnpj}</p>
+                        <p className="text-xs text-gray-500">{formatCNPJ(invoice.supplier_cnpj)}</p>
                     )}
                 </div>
             ),

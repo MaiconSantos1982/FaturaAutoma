@@ -101,3 +101,88 @@ export function getDocumentTypeLabel(type: string): string {
             return type || 'Documento';
     }
 }
+
+// ===== MASK FUNCTIONS =====
+
+/**
+ * Format CNPJ: 00.000.000/0000-00
+ */
+export function formatCNPJ(value: string): string {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 14 dígitos
+    const limited = numbers.slice(0, 14);
+
+    // Aplica a máscara
+    return limited
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+/**
+ * Format currency in Brazilian format: 1.234.567,89
+ */
+export function formatCurrencyInput(value: string): string {
+    // Remove tudo que não é número
+    let numbers = value.replace(/\D/g, '');
+
+    // Se vazio, retorna vazio
+    if (!numbers) return '';
+
+    // Converte para número (em centavos)
+    const numericValue = parseInt(numbers, 10);
+
+    // Converte para reais (divide por 100)
+    const reais = numericValue / 100;
+
+    // Formata com separadores brasileiros
+    return reais.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+/**
+ * Parse formatted currency back to number
+ */
+export function parseCurrencyInput(formattedValue: string): number {
+    if (!formattedValue) return 0;
+
+    // Remove pontos de milhar e troca vírgula por ponto
+    const cleaned = formattedValue
+        .replace(/\./g, '')
+        .replace(',', '.');
+
+    return parseFloat(cleaned) || 0;
+}
+
+/**
+ * Format number with thousand separators (for integer values like limits)
+ */
+export function formatNumberInput(value: string): string {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    if (!numbers) return '';
+
+    // Converte para número e formata
+    const numericValue = parseInt(numbers, 10);
+
+    return numericValue.toLocaleString('pt-BR');
+}
+
+/**
+ * Parse formatted number back to number
+ */
+export function parseNumberInput(formattedValue: string): number {
+    if (!formattedValue) return 0;
+
+    // Remove pontos de milhar
+    const cleaned = formattedValue.replace(/\./g, '');
+
+    return parseInt(cleaned, 10) || 0;
+}
+
