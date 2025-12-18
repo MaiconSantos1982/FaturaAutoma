@@ -44,6 +44,7 @@ export default function ApprovalsPage() {
                 .from('invoices')
                 .update({
                     approval_status: 'approved',
+                    status: 'completed',
                     approver_id: user.id,
                     approved_at: new Date().toISOString(),
                     debit_account_code: debitAccount || company?.default_debit_account,

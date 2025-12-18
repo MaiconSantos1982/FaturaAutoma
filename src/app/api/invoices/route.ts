@@ -102,6 +102,27 @@ export async function POST(request: NextRequest) {
         const autoApproveLimit = company?.auto_approve_limit || 0;
         const shouldAutoApprove = amount <= autoApproveLimit;
 
+        // Find applicable approval rule and approver
+        let assignedApproverId: string | null = null;
+        let approvalLevel: number | null = null;
+
+        if (!shouldAutoApprove) {
+            const { data: rules } = await supabase
+                .from('approval_rules')
+                .select('*')
+                .eq('company_id', user.company_id)
+                .eq('is_active', true)
+                .lte('min_amount', amount)
+                .or(`max_amount.gte.${amount},max_amount.is.null`)
+                .order('approval_level', { ascending: true })
+                .limit(1);
+
+            if (rules && rules.length > 0) {
+                assignedApproverId = rules[0].approver_id || null;
+                approvalLevel = rules[0].approval_level;
+            }
+        }
+
         // Create invoice
         const invoiceData = {
             company_id: user.company_id,
@@ -118,8 +139,10 @@ export async function POST(request: NextRequest) {
             po_number: body.po_number || null,
             file_type: body.file_type || null,
             original_file_url: body.original_file_url || null,
-            status: 'pending',
+            status: shouldAutoApprove ? 'completed' : 'pending',
             approval_status: shouldAutoApprove ? 'auto_approved' : 'pending',
+            approval_level: approvalLevel,
+            assigned_approver_id: assignedApproverId,
             debit_account_code: body.debit_account_code || company?.default_debit_account || null,
             credit_account_code: body.credit_account_code || company?.default_credit_account || null,
             created_by: user.id,
@@ -148,28 +171,16 @@ export async function POST(request: NextRequest) {
             new_values: invoiceData,
         });
 
-        // If not auto-approved, find approver and create notification
-        if (!shouldAutoApprove) {
-            const { data: rules } = await supabase
-                .from('approval_rules')
-                .select('*')
-                .eq('company_id', user.company_id)
-                .eq('is_active', true)
-                .lte('min_amount', amount)
-                .or(`max_amount.gte.${amount},max_amount.is.null`)
-                .order('approval_level', { ascending: true })
-                .limit(1);
-
-            if (rules && rules.length > 0 && rules[0].approver_id) {
-                await supabase.from('notifications').insert({
-                    company_id: user.company_id,
-                    user_id: rules[0].approver_id,
-                    invoice_id: invoice.id,
-                    type: 'approval_required',
-                    title: 'Nova fatura aguardando aprovação',
-                    message: `Fatura ${invoice.invoice_number} de ${invoice.supplier_name} no valor de R$ ${amount.toFixed(2)}`,
-                });
-            }
+        // If not auto-approved, notify the assigned approver
+        if (!shouldAutoApprove && assignedApproverId) {
+            await supabase.from('notifications').insert({
+                company_id: user.company_id,
+                user_id: assignedApproverId,
+                invoice_id: invoice.id,
+                type: 'approval_required',
+                title: 'Nova fatura aguardando aprovação',
+                message: `Fatura ${invoice.invoice_number} de ${invoice.supplier_name} no valor de R$ ${amount.toFixed(2)}`,
+            });
         }
 
         return successResponse(

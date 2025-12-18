@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
             .single();
 
         // Create invoice from extraction data or with pending status
-        const invoiceData = {
+        const invoiceData: Record<string, unknown> = {
             company_id: user.company_id,
             invoice_number: extractionData?.invoice_number || `TEMP-${Date.now()}`,
             invoice_series: extractionData?.invoice_series || null,
@@ -153,13 +153,30 @@ export async function POST(request: NextRequest) {
             created_by: user.id,
         };
 
-        // Check auto-approval if we have extraction data
+        // Check auto-approval and find assigned approver if we have extraction data
         if (extractionData?.total_amount) {
             const amount = parseFloat(extractionData.total_amount);
             const autoApproveLimit = company?.auto_approve_limit || 0;
+
             if (amount <= autoApproveLimit) {
                 invoiceData.approval_status = 'auto_approved';
                 invoiceData.status = 'completed';
+            } else {
+                // Find assigned approver based on approval rules
+                const { data: rules } = await supabase
+                    .from('approval_rules')
+                    .select('*')
+                    .eq('company_id', user.company_id)
+                    .eq('is_active', true)
+                    .lte('min_amount', amount)
+                    .or(`max_amount.gte.${amount},max_amount.is.null`)
+                    .order('approval_level', { ascending: true })
+                    .limit(1);
+
+                if (rules && rules.length > 0) {
+                    invoiceData.assigned_approver_id = rules[0].approver_id || null;
+                    invoiceData.approval_level = rules[0].approval_level;
+                }
             }
         }
 
